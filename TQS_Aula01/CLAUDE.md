@@ -139,3 +139,96 @@ Usar `@Test` de `org.junit.jupiter.api.Test`. Asserções de `org.junit.jupiter.
 | TC19 | 1 | 15 | 2025 | BVA year máx | 2025-01-16 |
 | TC20 | 2 | 28 | 1900 | BVA 1900 não-biss. | 1900-03-01 |
 | TC21 | 2 | 29 | 1900 | BVA 1900 não-biss. | null |
+
+---
+
+## Lab 3 — Decision Tables e State Transition Testing
+
+### Decision Tables (DT)
+
+**O que são:** Tabelas de decisão modelam comportamento condicional complexo. Cada coluna é uma **regra** que associa um conjunto de condições a um conjunto de ações. Cada regra pode originar um caso de teste.
+
+**Estrutura da tabela:**
+
+```
+               | R1 | R2 | R3 | ...
+Condições (Cx) |  T |  F |  - | ...   ← T=true, F=false, -=don't care
+Ações (Ax)     |  x |    |  x | ...   ← x=executar esta ação
+```
+
+- **Condition Stub**: lista de condições booleanas relevantes
+- **Action Stub**: lista de ações possíveis (outputs/resultados)
+- **Regra**: coluna que combina valores de condições com ações resultantes
+- **`-` (don't care)**: o valor desta condição não importa para esta regra
+- **Regras impossíveis**: combinações de condições que não podem ocorrer em simultâneo — devem ser eliminadas
+
+**Processo de derivação de testes:**
+1. Identificar todas as condições relevantes
+2. Enumerar todas as combinações possíveis (2^n para n condições booleanas)
+3. Eliminar combinações impossíveis
+4. Para cada regra válida, derivar um caso de teste concreto
+
+**Exemplo — Triângulo (simplificado):**
+
+| Condition Stub | R1 | R2 | R3 | R4 | R7 | R9 | R10 | R11 |
+|----------------|----|----|----|----|----|----|-----|-----|
+| C1: a < b+c    | F  | T  | T  | T  | T  | T  | T   | T   |
+| C2: b < a+c    | -  | F  | T  | T  | T  | T  | T   | T   |
+| C3: c < b+a    | -  | -  | F  | T  | T  | T  | T   | T   |
+| C4: a = b      | -  | -  | -  | T  | T  | F  | F   | F   |
+| C5: a = c      | -  | -  | -  | T  | F  | T  | F   | F   |
+| C6: b = c      | -  | -  | -  | T  | F  | F  | T   | F   |
+| A1: not triangle| x  | x  | x  |    |    |    |     |     |
+| A2: Scalene    |    |    |    |    |    |    |     | x   |
+| A3: Isosceles  |    |    |    |    | x  | x  | x   |     |
+| A4: Equilateral|    |    |    | x  |    |    |     |     |
+
+> R5 (a=b, a=c, b=c não todos T com apenas 2 iguais) e R8 são **impossíveis** e foram removidas.
+
+**Casos de teste derivados (um por regra):**
+
+| TC | a  | b  | c  | Output       |
+|----|----|----|----|--------------|
+| T1 | 4  | 1  | 2  | Not triangle |
+| T2 | 2  | 9  | 6  | Not triangle |
+| T3 | 3  | 4  | 8  | Not triangle |
+| T4 | 10 | 10 | 10 | Equilateral  |
+| T5 | 1  | 9  | 9  | Isosceles    |
+| T6 | 8  | 2  | 8  | Isosceles    |
+| T7 | 7  | 7  | 6  | Isosceles    |
+| T8 | 2  | 3  | 4  | Scalene      |
+
+---
+
+### State Transition Testing
+
+O comportamento do sistema depende não só do input atual mas também do **histórico de inputs** (estado atual).
+
+**Representações de uma máquina de estados:**
+- Diagrama gráfico
+- Tabela de transições reduzida (só transições válidas)
+- Tabela de transições completa (inclui transições inválidas como `undefined`)
+
+**Critérios de cobertura clássicos (ISTQB) — por ordem crescente de exigência:**
+
+| Critério | Definição | Subsume |
+|----------|-----------|---------|
+| **State Coverage** | Todos os estados visitados ≥ 1 vez | — |
+| **Transition Coverage (0-switch)** | Todas as transições exercidas ≥ 1 vez | State Coverage |
+| **N-switch Coverage** | Todos os N-switches percorridos ≥ 1 vez | (N-1)-switch Coverage |
+| **Invalid Transition Coverage** | Todas as transições inválidas tentadas (1 teste por transição inválida) | — |
+
+**O que é um N-switch:**
+- Um N-switch é uma sequência de transições com exatamente N+1 transições (N estados intermédios)
+- 0-switch: `A --(E1)--> B` (uma transição direta)
+- 1-switch: `A --(E1)--> B --(E2)--> C` (dois passos consecutivos)
+- 2-switch: `A --> B --> C --> D`
+
+**Como derivar 1-switches:**
+1. Listar todos os 0-switches (transições válidas)
+2. Para cada 0-switch `A → B`, expandir com cada transição possível a partir de B: `A → B → C`
+
+**Invalid Transition Coverage:**
+- Usar a tabela de transições **completa** para identificar todas as transições `undefined`
+- Criar **1 teste por transição inválida** (não se podem encadear num único teste)
+- Cada teste navega até ao estado correto e tenta o evento inválido

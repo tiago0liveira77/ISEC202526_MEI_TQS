@@ -180,4 +180,75 @@ class NextDateTest {
     void bva_1900_notLeapYear_feb29Invalid() {
         assertNull(NextDate.nextDate(2, 29, 1900));
     }
+
+    // =========================================================
+    // Lab 3 — Decision Table approach
+    //
+    // Conditions:
+    //   C1: date is valid (year∈[1900,2025], month∈[1,12], day∈[1,lastDay])
+    //   C2: day == last day of month
+    //   C3: month == 12
+    //   C4: year == 2025
+    //
+    // Actions:
+    //   A1: return null        (R1: invalid input; R5: Dec 31 of max year)
+    //   A2: day++              (R2: valid, not last day)
+    //   A3: day=1, month++     (R3: valid, last day, not December)
+    //   A4: day=1, month=1, year++ (R4: valid, Dec 31, year < 2025)
+    //
+    // Rules:        R1  R2  R3  R4  R5
+    //   C1 valid     F   T   T   T   T
+    //   C2 last day  -   F   T   T   T
+    //   C3 month=12  -   -   F   T   T
+    //   C4 year=2025 -   -   -   F   T
+    //   Action      A1  A2  A3  A4  A1
+    // =========================================================
+
+    // R1: invalid date → null (C1 = false)
+    @Test
+    void dt_r1_invalidDate_returnsNull() {
+        assertNull(NextDate.nextDate(0, 15, 2023));  // invalid month
+    }
+
+    // R2: valid date, not last day of month → day++ (C1=T, C2=F)
+    @Test
+    void dt_r2_notLastDay_incrementsDay() {
+        assertEquals(LocalDate.of(2023, 3, 16), NextDate.nextDate(3, 15, 2023));
+    }
+
+    // R3: valid date, last day of month, not December → day=1, month++ (C1=T, C2=T, C3=F)
+    @Test
+    void dt_r3_lastDayNotDecember_incrementsMonth() {
+        assertEquals(LocalDate.of(2023, 4, 1), NextDate.nextDate(3, 31, 2023));
+    }
+
+    // R3 variant: February last day (leap year logic absorbed into C2)
+    @Test
+    void dt_r3_feb28NonLeap_rollsToMarch() {
+        assertEquals(LocalDate.of(2023, 3, 1), NextDate.nextDate(2, 28, 2023));
+    }
+
+    @Test
+    void dt_r2_feb28LeapYear_incrementsDay() {
+        // Feb 28 in leap year is NOT the last day → R2
+        assertEquals(LocalDate.of(2024, 2, 29), NextDate.nextDate(2, 28, 2024));
+    }
+
+    @Test
+    void dt_r3_feb29LeapYear_rollsToMarch() {
+        // Feb 29 in leap year IS the last day, month != 12 → R3
+        assertEquals(LocalDate.of(2024, 3, 1), NextDate.nextDate(2, 29, 2024));
+    }
+
+    // R4: Dec 31, year < 2025 → day=1, month=1, year++ (C1=T, C2=T, C3=T, C4=F)
+    @Test
+    void dt_r4_dec31NotMaxYear_incrementsYear() {
+        assertEquals(LocalDate.of(2025, 1, 1), NextDate.nextDate(12, 31, 2024));
+    }
+
+    // R5: Dec 31, year == 2025 → null (C1=T, C2=T, C3=T, C4=T)
+    @Test
+    void dt_r5_dec31MaxYear_returnsNull() {
+        assertNull(NextDate.nextDate(12, 31, 2025));
+    }
 }
