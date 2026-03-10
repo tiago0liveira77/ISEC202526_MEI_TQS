@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Visão Geral do Projeto
 
-Projeto Java com Maven para a disciplina TQS (Técnicas e Qualidade de Software) — ISEC MEI 2025-2026. Foco em técnicas de teste de software: ECT (Equivalence Class Testing) e BVA (Boundary Value Analysis).
+Projeto Java com Maven para a disciplina TQS (Técnicas e Qualidade de Software) — ISEC MEI 2025-2026. Foco em técnicas de teste de software: ECT, BVA, Decision Tables e State Transition Testing.
 
 - **Package principal:** `org.ficha01`
 - **Versão JUnit:** `5.11.4` (não usar 6.x — incompatível com o runner do IntelliJ)
@@ -232,3 +232,175 @@ O comportamento do sistema depende não só do input atual mas também do **hist
 - Usar a tabela de transições **completa** para identificar todas as transições `undefined`
 - Criar **1 teste por transição inválida** (não se podem encadear num único teste)
 - Cada teste navega até ao estado correto e tenta o evento inválido
+
+---
+
+## Lab 4 — Cobertura de Grafos (Structural Coverage)
+
+### Definições de Critérios de Cobertura de Grafos
+
+**Node Coverage (NC) — Cobertura de Nós**
+- **TR:** Cada nó n ∈ N deve ser visitado por pelo menos um caminho de teste.
+- É o critério mais fraco. Basta que cada nó apareça em algum caminho.
+
+**Edge Coverage (EC) — Cobertura de Arestas**
+- **TR:** Cada aresta (u, v) ∈ E deve ser percorrida por pelo menos um caminho de teste.
+- Subsume Node Coverage: cobrir todas as arestas implica visitar todos os nós.
+- Mais forte que NC porque exige que cada **transição** entre nós seja exercida.
+
+**Edge-Pair Coverage (EPC) — Cobertura de Pares de Arestas**
+- **TR:** Cada par de arestas consecutivas (caminho de comprimento 2) — ou seja, cada subcaminho [u, v, w] tal que (u,v) ∈ E e (v,w) ∈ E — deve ser percorrido por pelo menos um caminho de teste. Para nós sem arestas de saída (nós finais), considera-se o subcaminho de comprimento 1 que termina nesse nó.
+- Subsume Edge Coverage.
+- Mais forte que EC porque exige que cada **par de transições consecutivas** seja exercido.
+
+**Hierarquia de subsunção:**
+```
+Edge-Pair Coverage (EPC)
+        ↓ subsume
+  Edge Coverage (EC)
+        ↓ subsume
+  Node Coverage (NC)
+```
+
+---
+
+### Prime Path Coverage (PPC) — Cobertura de Caminhos Primos
+
+**Definições:**
+- **Caminho simples:** nenhum nó se repete, *exceto* que o primeiro e o último podem ser iguais (ciclo simples).
+- **Prime path:** caminho simples **maximal** — não é subpath próprio de nenhum outro caminho simples.
+- **TR:** cada prime path deve ser percorrido por pelo menos um caminho de teste (diretamente ou com sidetrip).
+- Subsume Edge-Pair Coverage.
+
+**Algoritmo para identificar prime paths:**
+
+1. Expandir caminhos simples a partir de cada nó, nunca repetindo nós (exceto para fechar ciclo).
+2. Um caminho é **prime** se não puder ser estendido em nenhuma direção:
+   - **Para a frente:** todos os sucessores do último nó já estão no caminho, ou é nó terminal.
+   - **Para trás:** todos os predecessores do primeiro nó já estão no caminho, ou não há predecessores.
+3. Se conseguires adicionar um nó antes do início **ou** depois do fim mantendo o caminho simples → **não é prime** (é subpath de outro).
+
+**Regras práticas:**
+- **Ciclos:** cada rotação do ponto de partida origina um prime path distinto. Ex: [1,2,4,6,1] e [2,4,6,1,2] são ambos prime.
+- **Caminhos até nós terminais:** rastrear para trás a partir do nó terminal até bloquear (predecessor já no caminho).
+- **Caminhos que terminam "presos":** nós cujo único sucessor já está no caminho (ex: nó 3 em [4,6,1,2,3] — só tem 3→2 e 2 já está).
+
+**Verificação rápida:** `[2,4,5,6,1,7]` é prime?
+- Para trás: pred(2) = {1, 3}. Tentar 3→2: [3,2,4,5,6,1,7] — válido e simples.
+- Logo [2,4,5,6,1,7] é subpath de [3,2,4,5,6,1,7] → **NÃO é prime**.
+
+---
+
+### Exercício 1 — Afirmações sobre critérios de cobertura
+
+**a) "Se T satisfaz edge-pair coverage, também satisfaz node coverage"**
+
+**VERDADEIRO.** A hierarquia de subsunção é:
+
+```
+Edge-Pair Coverage (EPC)
+        ↓ subsume
+  Edge Coverage (EC)
+        ↓ subsume
+  Node Coverage (NC)
+```
+
+Cobrir todos os pares de arestas implica obrigatoriamente cobrir todos os nós.
+
+---
+
+**b) "Se T_edge satisfaz edge coverage e T_node satisfaz node coverage, então T_node ⊆ T_edge"**
+
+**FALSO.** T_edge e T_node são conjuntos de caminhos de teste **independentes**, escolhidos separadamente para satisfazer critérios distintos. Não existe nenhuma relação de inclusão garantida entre os dois conjuntos.
+
+---
+
+**c) "Se T_edge satisfaz edge coverage e T_node satisfaz node coverage, então se T_node revela um defeito, T_edge também o revela"**
+
+**FALSO.** Embora EC subsuma NC como critério estrutural, isso **não garante** que T_edge detete os mesmos defeitos que T_node. Um defeito pode exigir uma sequência específica de nós/arestas com valores de input concretos. T_node pode exercitar essa sequência acidentalmente, enquanto T_edge usa caminhos diferentes para cobrir todas as arestas, nunca atingindo a condição que provoca o defeito. A subsunção de critérios refere-se à cobertura estrutural, não à capacidade de deteção de defeitos de conjuntos específicos de testes.
+
+---
+
+### Exercício 2 — Grafo I
+
+```
+N={1,2,3,4,5,6,7}  N0={1}  Nf={7}
+E={(1,2),(1,7),(2,3),(2,4),(3,2),(4,5),(4,6),(5,6),(6,1)}
+
+Candidate Test Paths:
+  t0 = [1,2,4,5,6,1,7]
+  t1 = [1,2,3,2,4,6,1,7]
+```
+
+**a) Grafo (arestas de saída por nó):**
+```
+1 → 2, 7
+2 → 3, 4
+3 → 2   (back edge — ciclo pequeno)
+4 → 5, 6
+5 → 6
+6 → 1   (back edge — ciclo principal)
+7       (nó final, sem saídas)
+```
+
+**b) TR para Edge-Pair Coverage (12 requisitos):**
+
+| # | Par (u,v,w) | Nó intermédio |
+|---|-------------|---------------|
+| 1 | (6,1,2) | 1 |
+| 2 | (6,1,7) | 1 |
+| 3 | (1,2,3) | 2 |
+| 4 | (1,2,4) | 2 |
+| 5 | (3,2,3) | 2 |
+| 6 | (3,2,4) | 2 |
+| 7 | (2,3,2) | 3 |
+| 8 | (2,4,5) | 4 |
+| 9 | (2,4,6) | 4 |
+| 10 | (4,5,6) | 5 |
+| 11 | (4,6,1) | 6 |
+| 12 | (5,6,1) | 6 |
+
+**c) {t0, t1} satisfaz EPC?**
+
+| TR | t0 | t1 |
+|----|----|----|
+| (6,1,2) | ✗ | ✗ |
+| (6,1,7) | ✓ | ✓ |
+| (1,2,3) | ✗ | ✓ |
+| (1,2,4) | ✓ | ✗ |
+| **(3,2,3)** | ✗ | ✗ |
+| (3,2,4) | ✗ | ✓ |
+| (2,3,2) | ✗ | ✓ |
+| (2,4,5) | ✓ | ✗ |
+| (2,4,6) | ✗ | ✓ |
+| (4,5,6) | ✓ | ✗ |
+| (4,6,1) | ✗ | ✓ |
+| (5,6,1) | ✓ | ✗ |
+
+**NÃO satisfaz EPC.** Faltam: **(6,1,2)** e **(3,2,3)**.
+
+**d) Simple path [3,2,4,5,6] vs test path [1,2,3,2,4,6,1,2,4,5,6,1,7]:**
+
+- **Tour direto:** NÃO. O caminho de teste não contém [3,2,4,5,6] como subsequência contígua (após 3,2,4 surge 6 em vez de 5).
+- **Tour com sidetrip:** SIM. A sequência é coberta com um desvio no nó 4:
+  - 3(idx2) → 2(3) → 4(4) → **[sidetrip: 4→6→1→2→4]** → 5(9) → 6(10)
+  - O sidetrip é **[4,6,1,2,4]**: o caminho sai do nó 4, percorre 6→1→2 e regressa a 4 antes de avançar para 5.
+
+**e) Prime paths:**
+
+| # | Prime Path | Tipo |
+|---|-----------|------|
+| PP1 | [2,3,2] | ciclo |
+| PP2 | [1,2,4,6,1] | ciclo |
+| PP3 | [1,2,4,5,6,1] | ciclo |
+| PP4 | [2,4,6,1,2] | ciclo |
+| PP5 | [2,4,5,6,1,2] | ciclo |
+| PP6 | [3,2,4,6,1,7] | acíclico |
+| PP7 | [3,2,4,5,6,1,7] | acíclico |
+| PP8 | [4,6,1,2,3] | acíclico |
+| PP9 | [4,5,6,1,2,3] | acíclico |
+
+**f) Caminhos que satisfazem EC mas não PPC:**
+
+{t0, t1} satisfaz edge coverage (cobrem as 9 arestas) mas NÃO satisfaz prime path coverage.
+Prime paths não percorridos por {t0, t1}: PP4 [2,4,6,1,2], PP5 [2,4,5,6,1,2], PP7 [3,2,4,5,6,1,7], PP8 [4,6,1,2,3], PP9 [4,5,6,1,2,3].
